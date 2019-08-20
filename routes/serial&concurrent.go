@@ -2,102 +2,158 @@ package routes
 
 import (
 	"encoding/json"
-	"fmt"
+//	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
+	"time"
 )
 
-var Mapping map[string]DownloadType
 
 type DownloadType interface {
-	getFiles()
+	getFiles(http.ResponseWriter, *http.Request, *Response)
 }
 
 type Serial struct {
 	Type string   `json:"type"`
 	Urls []string `json:"urls"`
-	status string
 }
 
 type Concurrent struct {
 	Type string   `json:"type"`
 	Urls []string `json:"urls"`
-	status string
 }
 
-func (s Serial) getFiles(w http.ResponseWriter, r *http.Request){
+func (s Serial) getFiles(w http.ResponseWriter, r *http.Request, resp *Response){
 
-	response, _ := ioutil.ReadAll(r.Body)
+	respond, _ := ioutil.ReadAll(r.Body)
 
-	json.Unmarshal(response,&s)
+	json.Unmarshal(respond,&s)
 
-	filepath := ""
+	Files := make(map[string]string)
 
-	for i:=0;i<len(s.Urls);i++ {
-		name := strings.Split(s.Urls[i],"/")
-		fmt.Println(name)
-		if err := filesDownload(s.Urls[i],filepath+name[len(name)-1]); err != nil {
-			panic(err)
-			return
-		}
+	channel := make(chan string)
+
+	for _,i:=range(s.Urls){
+		go filesDownload(i,Files,resp,channel)
+		Files[i] = <-channel
 	}
 
-	s.status = "Downloaded"
-}
-
-func (c Concurrent) getFiles(w http.ResponseWriter, r *http.Request){
-
-	response, _ := ioutil.ReadAll(r.Body)
-
-	json.Unmarshal(response,&c)
-
-	filepath := ""
-
-	for i:=0;i<len(c.Urls);i++ {
-		name := strings.Split(c.Urls[i],"/")
-		fmt.Println(name)
-		if err := filesDownload(c.Urls[i],filepath+name[len(name)-1]); err != nil {
-			panic(err)
-			return
-		}
+	out, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	c.status = "Downloaded"
+	resp.ID = strings.Trim(string(out), "\n")
+
+	resp.EndTime = time.Now()
+	resp.Files = Files
+
+	if(resp.Status=="Downloading") {
+		resp.Status = "Successful"
+	}
+
+	Status[resp.ID] = *resp
+
+	b, err := json.Marshal(resp)
+	w.Write(b)
 }
 
-func filesDownload(fileUrl string, filepath string) error {
 
-	fmt.Println(filepath)
+func (c Concurrent) getFiles(w http.ResponseWriter, r *http.Request, resp *Response){
 
-	resp, err := http.Get(fileUrl)
+	out, err := exec.Command("uuidgen").Output()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	resp.ID = strings.Trim(string(out), "\n")
+
+	respond, _ := ioutil.ReadAll(r.Body)
+
+	json.Unmarshal(respond,&c)
+
+	Files := make(map[string]string)
+
+	b, err := json.Marshal(resp)
+
+	w.Write(b)
+
+	channel := make(chan string)
+
+	for _,i:=range(c.Urls){
+		go filesDownload(i,Files,resp,channel)
+		Files[i] = <-channel
+	}
+
+	resp.EndTime = time.Now()
+	resp.Files = Files
+
+	if(resp.Status=="Downloading") {
+		resp.Status = "Successful"
+	}
+
+	Status[resp.ID] = *resp
+}
+
+func filesDownload(fileUrl string,Files map[string]string, resp *Response,channel chan string) {
+
+	res, err := http.Get(fileUrl)
 
 	if err !=nil {
-		return err
+		resp.Status="Failed"
+		channel<-"Failed"
+		return
 	}
-	defer resp.Body.Close()
+	defer res.Body.Close()
 
-	out, err := os.Create(filepath)
+	name := strings.Split(fileUrl,"/")
+
+	filepath := "/tmp/"+name[len(name)-1]
+
+	output, err := os.Create(filepath)
 	if err != nil {
-		return err
+		resp.Status="Failed"
+		channel<-"Failed"
+		return
 	}
-	defer out.Close()
+	defer output.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	_, err = io.Copy(output, res.Body)
+	if err != nil {
+		resp.Status="Failed"
+		channel<-"Failed"
+		return
+	}
+
+	 channel<-filepath
 }
 
 func SerialDownload(w http.ResponseWriter, r *http.Request){
 	var s Serial
-	s.status = "Failed"
-	s.getFiles(w,r)
+
+	var resp Response
+
+	resp.StartTime = time.Now()
+	resp.DownloadType = "Serial"
+	resp.Status = "Downloading"
+
+	s.getFiles(w,r,&resp)
 }
 
 func ConDownload(w http.ResponseWriter, r *http.Request){
 	var c Concurrent
-	c.status = "Failed"
-	c.getFiles(w,r)
+
+	var resp Response
+
+	resp.StartTime = time.Now()
+	resp.DownloadType = "Concurrent"
+	resp.Status = "Downloading"
+
+	c.getFiles(w,r,&resp)
 }
 
