@@ -54,7 +54,7 @@ func (c Concurrent) Files(resp *Response) {
 				if err != nil {
 					resp.Files[url] = "Invalid Request"
 					resp.Status = "Failed"
-					continue
+					return
 				}
 				c.fileDownload(url, resp.Files, resp)
 			}
