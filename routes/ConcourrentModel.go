@@ -10,23 +10,23 @@ import (
 	"time"
 )
 
-func (c Concurrent) fileDownload(fileUrl string,Files map[string]string, resp *Response) {
+func (c Concurrent) fileDownload(fileUrl string, Files map[string]string, resp *Response) {
 	res, err := http.Get(fileUrl)
 
-	if err !=nil {
-		resp.Status="Failed"
+	if err != nil {
+		resp.Status = "Failed"
 		Files[fileUrl] = "Invalid Request"
 		return
 	}
 	defer res.Body.Close()
 
-	name := strings.Split(fileUrl,"/")
+	name := strings.Split(fileUrl, "/")
 
-	filepath := "/tmp/"+name[len(name)-1]
+	filepath := "/tmp/" + name[len(name)-1]
 
 	output, err := os.Create(filepath)
 	if err != nil {
-		resp.Status="Failed"
+		resp.Status = "Failed"
 		Files[fileUrl] = "Invalid Request"
 		return
 	}
@@ -34,7 +34,7 @@ func (c Concurrent) fileDownload(fileUrl string,Files map[string]string, resp *R
 
 	_, err = io.Copy(output, res.Body)
 	if err != nil {
-		resp.Status="Failed"
+		resp.Status = "Failed"
 		Files[fileUrl] = "Invalid Request"
 		return
 	}
@@ -42,39 +42,39 @@ func (c Concurrent) fileDownload(fileUrl string,Files map[string]string, resp *R
 	Files[fileUrl] = filepath
 }
 
-func (c Concurrent) Files(resp *Response){
+func (c Concurrent) Files(resp *Response) {
 	c.channel = make(chan string)
 	resp.Files = make(map[string]string)
 
 	for i := 0; i < c.bound; i++ {
-		go func(){
-			for{
+		go func() {
+			for {
 				url := <-c.channel
 				_, err := http.Get(url)
-				if (err != nil) {
+				if err != nil {
 					resp.Files[url] = "Invalid Request"
 					resp.Status = "Failed"
 					continue
 				}
-				c.fileDownload(url,resp.Files,resp)
+				c.fileDownload(url, resp.Files, resp)
 			}
 		}()
 	}
 
-	for _,link:=range(c.Urls) {
-		c.channel<-link
+	for _, link := range c.Urls {
+		c.channel <- link
 	}
 
-	if(resp.Status!="Failed") {
+	if resp.Status != "Failed" {
 		resp.Status = "Successful"
 	}
 
 	resp.EndTime = time.Now()
 }
 
+func (c Concurrent) StartResponse(resp *Response) {
 
-func (c Concurrent) StartResponse(resp *Response){
-	c.bound = int(math.Min(7,float64(len(c.Urls))))
+	c.bound = int(math.Min(7, float64(len(c.Urls))))
 
 	fmt.Println(c.bound)
 
@@ -83,5 +83,3 @@ func (c Concurrent) StartResponse(resp *Response){
 
 	Status[resp.ID] = *resp
 }
-
-
