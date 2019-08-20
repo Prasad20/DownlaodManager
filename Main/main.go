@@ -9,15 +9,14 @@ import (
 
 func homePage(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write([]byte(`{"message": "Hello"}`))
+	w.Write([]byte(`{"message": "ok"}`))
 }
 
 func handleRequests() {
 
 	http.HandleFunc("/Health", homePage)
-	http.HandleFunc("/DownloadSerial", routes.SerialDownload)
-	http.HandleFunc("/DownloadConcurrent", routes.ConDownload)
-	http.HandleFunc("/Status",routes.DownloadStatus)
+	http.HandleFunc("/Downloads", routes.Select)
+	http.HandleFunc("/Downloads/",routes.DownloadStatus)
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
 

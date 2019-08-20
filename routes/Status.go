@@ -2,8 +2,8 @@ package routes
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -18,18 +18,16 @@ type Response struct {
 	Files 		 map[string]string `json:"files"`
 }
 
-type Request struct{
-	ID           string `json:"id"`
+func parse(path string) string{
+	id := strings.Split(path, string('/'))
+
+	return id[len(id)-1]
 }
 
 func DownloadStatus(w http.ResponseWriter, r *http.Request){
-	var req Request
+	req := parse(r.URL.Path)
 
-	respond, _ := ioutil.ReadAll(r.Body)
-
-	json.Unmarshal(respond,&req)
-
-	v,ok:= Status[req.ID]
+	v,ok:= Status[req]
 
 	if(ok) {
 		b, _ := json.Marshal(v)
