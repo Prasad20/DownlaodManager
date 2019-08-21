@@ -46,10 +46,17 @@ func (c Concurrent) Files(resp *Response) {
 	c.channel = make(chan string)
 	resp.Files = make(map[string]string)
 
+	j := 0
+
 	for i := 0; i < c.bound; i++ {
 		go func() {
 			for {
-				url := <-c.channel
+				url, ok := <-c.channel
+
+				if !ok {
+					return
+				}
+
 				_, err := http.Get(url)
 				if err != nil {
 					resp.Files[url] = "Invalid Request"
@@ -64,6 +71,7 @@ func (c Concurrent) Files(resp *Response) {
 	for _, link := range c.Urls {
 		c.channel <- link
 	}
+	close(c.channel)
 
 	if resp.Status != "Failed" {
 		resp.Status = "Successful"
